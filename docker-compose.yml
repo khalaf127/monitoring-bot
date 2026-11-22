@@ -1,0 +1,67 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: pizza
+      POSTGRES_PASSWORD: pizza
+      POSTGRES_DB: pizza
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pizza"]
+      interval: 5s
+      retries: 10
+
+  order-api:
+    build: ./services/order-api
+    ports:
+      - "8081:8000"
+    environment:
+      DATABASE_URL: postgresql://pizza:pizza@postgres:5432/pizza
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  payment-service:
+    build: ./services/payment-service
+    environment:
+      FAILURE_RATE: "0.05"
+      LATENCY_MS: "100"
+
+  kitchen-service:
+    build: ./services/kitchen-service
+
+  load-generator:
+    build: ./services/load-generator
+    environment:
+      ORDERS_PER_SECOND: "2"
+    depends_on:
+      - order-api
+
+  prometheus:
+    image: prom/prometheus:v3.0.1
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    pid: host
+    command: ["--path.rootfs=/host"]
+    volumes:
+      - /:/host:ro,rslave
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    ports:
+      - "3000:3000"
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+
+volumes:
+  pgdata:
