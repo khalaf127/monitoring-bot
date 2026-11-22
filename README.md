@@ -1,5 +1,7 @@
 # monitoring-bot
 
+A bot that helps with server monitoring and lets you get info with simple commands.
+
 A pizza ordering system used as the target for an incident game: things break, players fix them, and a Discord bot keeps score.
 
 ## Services
