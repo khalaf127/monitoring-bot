@@ -1,0 +1,86 @@
+# Unit tests for alert rules. Run with:
+#   docker run --rm -v ./monitoring/prometheus:/p -w /p --entrypoint promtool prom/prometheus:v3.0.1 test rules tests/alerts_test.yml
+rule_files:
+  - ../rules/recording.yml
+  - ../rules/alerts.yml
+
+evaluation_interval: 15s
+
+tests:
+  # order-api answers 1 in 3 requests with 503 -> HighErrorRate after 2m
+  - interval: 15s
+    input_series:
+      - series: 'http_requests_total{job="pizza", service="order-api", method="POST", path="/orders", status="201"}'
+        values: '0+4x40'
+      - series: 'http_requests_total{job="pizza", service="order-api", method="POST", path="/orders", status="503"}'
+        values: '0+2x40'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: HighErrorRate
+        exp_alerts: []   # still pending, `for: 2m` not reached
+      - eval_time: 5m
+        alertname: HighErrorRate
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              service: order-api
+            exp_annotations:
+              summary: "order-api is failing 33.33% of requests"
+              description: "More than 5% of requests to order-api returned 5xx for 2 minutes."
+              runbook_url: https://github.com/khalaf127/monitoring-bot/blob/main/docs/runbooks.md#higherrorrate
+
+  # A healthy shop: some 402s (declined cards) but no 5xx -> nothing fires
+  - interval: 15s
+    input_series:
+      - series: 'http_requests_total{job="pizza", service="order-api", method="POST", path="/orders", status="201"}'
+        values: '0+20x40'
+      - series: 'http_requests_total{job="pizza", service="order-api", method="POST", path="/orders", status="402"}'
+        values: '0+1x40'
+      - series: 'orders_total{status="ready"}'
+        values: '0+20x40'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: HighErrorRate
+        exp_alerts: []
+      - eval_time: 8m
+        alertname: NoPizzasServed
+        exp_alerts: []
+
+  # kitchen-service stops answering scrapes -> TargetDown after 1m
+  - interval: 15s
+    input_series:
+      - series: 'up{job="pizza", service="kitchen-service", instance="kitchen-service:8000"}'
+        values: '1 1 1 0x20'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: TargetDown
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: TargetDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: pizza
+              service: kitchen-service
+              instance: kitchen-service:8000
+            exp_annotations:
+              summary: "kitchen-service is down"
+              description: "Prometheus has not been able to scrape kitchen-service:8000 (job pizza) for over 1 minute."
+              runbook_url: https://github.com/khalaf127/monitoring-bot/blob/main/docs/runbooks.md#targetdown
+
+  # No orders at all -> NoPizzasServed, even though orders_total doesn't exist
+  - interval: 15s
+    input_series:
+      - series: 'up{job="pizza", service="order-api", instance="order-api:8000"}'
+        values: '1x40'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: NoPizzasServed
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              service: order-api
+            exp_annotations:
+              summary: "No pizzas have been served for 5 minutes"
+              description: "No order reached status 'ready' in the last 5 minutes. Customers are getting nothing."
+              runbook_url: https://github.com/khalaf127/monitoring-bot/blob/main/docs/runbooks.md#nopizzasserved

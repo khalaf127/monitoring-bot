@@ -1,0 +1,107 @@
+# Alert rules. Guidelines followed here:
+#  - Alert on symptoms users feel (errors, latency, no pizzas), not on every cause.
+#  - Always use `for:` so a short blip doesn't page anyone.
+#  - Every alert has severity, service, summary and a runbook link.
+#      critical = act now, warning = look soon
+groups:
+  - name: availability
+    rules:
+      - alert: TargetDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.service }} is down"
+          description: "Prometheus has not been able to scrape {{ $labels.instance }} (job {{ $labels.job }}) for over 1 minute."
+          runbook_url: https://github.com/khalaf127/monitoring-bot/blob/main/docs/runbooks.md#targetdown
+
+      - alert: PostgresDown
+        expr: pg_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Postgres is unreachable"
+          description: "postgres-exporter is running but cannot connect to the database."
+          runbook_url: https://github.com/khalaf127/monitoring-bot/blob/main/docs/runbooks.md#postgresdown
+
+  - name: pizza-slo
+    rules:
+      - alert: HighErrorRate
+        expr: service:http_errors_5xx:ratio_rate1m > 0.05
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.service }} is failing {{ $value | humanizePercentage }} of requests"
+          description: "More than 5% of requests to {{ $labels.service }} returned 5xx for 2 minutes."
+          runbook_url: https://github.com/khalaf127/monitoring-bot/blob/main/docs/runbooks.md#higherrorrate
+
+      - alert: HighLatency
+        expr: service:http_request_duration_seconds:p95_rate5m > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.service }} p95 latency is {{ $value | humanizeDuration }}"
+          description: "95th percentile latency of {{ $labels.service }} has been above 2s for 5 minutes."
+          runbook_url: https://github.com/khalaf127/monitoring-bot/blob/main/docs/runbooks.md#highlatency
+
+      - alert: PaymentDeclineRateHigh
+        expr: shop:payments_declined:ratio_rate5m > 0.20
+        for: 5m
+        labels:
+          severity: warning
+          service: payment-service
+        annotations:
+          summary: "{{ $value | humanizePercentage }} of payments are being declined"
+          description: "Normal decline rate is about 5%. It has been above 20% for 5 minutes."
+          runbook_url: https://github.com/khalaf127/monitoring-bot/blob/main/docs/runbooks.md#paymentdeclineratehigh
+
+      - alert: NoPizzasServed
+        # `or vector(0)` makes this fire even when the series doesn't exist at all
+        expr: (sum(rate(orders_total{status="ready"}[5m])) or vector(0)) == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: order-api
+        annotations:
+          summary: "No pizzas have been served for 5 minutes"
+          description: "No order reached status 'ready' in the last 5 minutes. Customers are getting nothing."
+          runbook_url: https://github.com/khalaf127/monitoring-bot/blob/main/docs/runbooks.md#nopizzasserved
+
+  - name: host
+    rules:
+      - alert: HostHighCpu
+        expr: 100 * (1 - avg by (instance, service) (rate(node_cpu_seconds_total{mode="idle"}[5m]))) > 90
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host CPU is at {{ $value | printf \"%.0f\" }}%"
+          description: "CPU usage has been above 90% for 10 minutes."
+          runbook_url: https://github.com/khalaf127/monitoring-bot/blob/main/docs/runbooks.md#hosthighcpu
+
+      - alert: HostLowMemory
+        expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host has only {{ $value | humanizePercentage }} memory available"
+          description: "Available memory has been below 10% for 5 minutes."
+          runbook_url: https://github.com/khalaf127/monitoring-bot/blob/main/docs/runbooks.md#hostlowmemory
+
+      - alert: HostDiskAlmostFull
+        expr: |
+          node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs"}
+            / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs"} < 0.10
+          and node_filesystem_readonly == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk {{ $labels.mountpoint }} has {{ $value | humanizePercentage }} free"
+          description: "Free space on {{ $labels.mountpoint }} has been below 10% for 10 minutes."
+          runbook_url: https://github.com/khalaf127/monitoring-bot/blob/main/docs/runbooks.md#hostdiskalmostfull
