@@ -1,0 +1,27 @@
+# Recording rules: queries Prometheus evaluates on a schedule and stores as
+# new series. Alerts and dashboards reuse them so the math lives in one place.
+# Naming convention: level:metric:operations
+groups:
+  - name: pizza-red
+    # RED method for each service: Rate, Errors, Duration
+    rules:
+      - record: service:http_requests:rate1m
+        expr: sum by (service) (rate(http_requests_total{job="pizza", path!~"/health|unmatched"}[1m]))
+
+      - record: service:http_errors_5xx:rate1m
+        expr: sum by (service) (rate(http_requests_total{job="pizza", path!~"/health|unmatched", status=~"5.."}[1m]))
+
+      # 5xx only: a declined card (402) is a business outcome, not a server error
+      - record: service:http_errors_5xx:ratio_rate1m
+        expr: service:http_errors_5xx:rate1m / service:http_requests:rate1m
+
+      - record: service:http_request_duration_seconds:p95_rate5m
+        expr: histogram_quantile(0.95, sum by (le, service) (rate(http_request_duration_seconds_bucket{job="pizza", path!~"/health|unmatched"}[5m])))
+
+  - name: pizza-business
+    rules:
+      - record: shop:orders:rate5m
+        expr: sum by (status) (rate(orders_total[5m]))
+
+      - record: shop:payments_declined:ratio_rate5m
+        expr: sum(rate(payments_total{result="declined"}[5m])) / sum(rate(payments_total[5m]))

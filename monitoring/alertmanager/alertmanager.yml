@@ -1,0 +1,30 @@
+# Alertmanager decides what happens to firing alerts:
+# grouping, deduplication, silencing, inhibition and routing to receivers.
+route:
+  receiver: default
+  group_by: [alertname, service]  # one notification per (alert, service)
+  group_wait: 30s                 # wait to batch alerts that fire together
+  group_interval: 5m              # min time between updates for a group
+  repeat_interval: 4h             # re-notify if still firing
+  routes:
+    - matchers: [severity="critical"]
+      receiver: default
+      repeat_interval: 1h
+
+receivers:
+  # No notifier yet: alerts show in the Alertmanager UI (:9093) and Grafana.
+  # When the Discord bot exists, point a webhook here, e.g.:
+  #   webhook_configs:
+  #     - url: http://discord-bot:8080/alerts
+  #       send_resolved: true
+  - name: default
+
+inhibit_rules:
+  # If a service is down, don't also spam its error/latency/no-pizza alerts
+  - source_matchers: [alertname="TargetDown"]
+    target_matchers: [alertname!="TargetDown"]
+    equal: [service]
+  # A critical alert mutes the warning of the same alert on the same service
+  - source_matchers: [severity="critical"]
+    target_matchers: [severity="warning"]
+    equal: [alertname, service]

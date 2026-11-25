@@ -9,6 +9,95 @@
   },
   "panels": [
     {
+      "type": "table",
+      "title": "Firing alerts",
+      "id": 100,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 6
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "ALERTS{alertstate=\"firing\"}",
+          "instant": true,
+          "format": "table",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "__name__": true,
+              "alertstate": true,
+              "job": true,
+              "instance": true
+            },
+            "indexByName": {
+              "severity": 0,
+              "alertname": 1,
+              "service": 2
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "All good, nothing firing"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "severity"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "critical": {
+                        "color": "red",
+                        "index": 0
+                      },
+                      "warning": {
+                        "color": "orange",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true
+      }
+    },
+    {
       "id": 1,
       "title": "Services",
       "type": "stat",
@@ -18,7 +107,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 0,
+        "y": 6,
         "w": 24,
         "h": 4
       },
@@ -85,7 +174,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 4,
+        "y": 10,
         "w": 12,
         "h": 8
       },
@@ -117,7 +206,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 4,
+        "y": 10,
         "w": 12,
         "h": 8
       },
@@ -174,7 +263,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 12,
+        "y": 18,
         "w": 12,
         "h": 8
       },
@@ -206,7 +295,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 12,
+        "y": 18,
         "w": 12,
         "h": 8
       },
@@ -238,7 +327,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 20,
+        "y": 26,
         "w": 24,
         "h": 8
       },

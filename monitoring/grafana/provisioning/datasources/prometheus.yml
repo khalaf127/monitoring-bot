@@ -5,3 +5,12 @@ datasources:
     url: http://prometheus:9090
     uid: prometheus
     isDefault: true
+
+  # Lets Grafana's Alerting page show alerts and silences from Alertmanager
+  - name: Alertmanager
+    type: alertmanager
+    url: http://alertmanager:9093
+    uid: alertmanager
+    jsonData:
+      implementation: prometheus
+      handleGrafanaManagedAlerts: false
